@@ -1,0 +1,117 @@
+# Grammer of the HDDL language
+
+1 <domain> ::= (define (domain <name>)
+2 [<require-def>]
+3 [<types-def>]
+    only with feature :typing
+4 [<constants-def>]
+5 [<predicates-def>]
+6 <comp-task-def>*
+7 <method-def>*
+8 <action-def>*)
+9 <require-def> ::=
+    (:requirements <require-key>+)
+10 <require-key> ::= ...
+11 <types-def> ::= (:types <types>+)
+12 <types> ::= <typed list (name)>
+    | <base-type>
+13 <base-type> ::= <name>
+14 <constants-def> ::=
+    (:constants <typed list (name)>)
+15 <predicates-def> ::=
+    (:predicates <atomic-formula-skeleton>+)
+16 <atomic-formula-skeleton> ::=
+    (<predicate> <typed list (variable)>)
+17 <predicate> ::= <name>
+18 <variable> ::= ?<name>
+19 <typed list (x)> ::= x+ - <type>
+    [<typed list (x)>]
+20 <primitive-type> ::= <name>
+21 <type> ::= (either <primitive-type>+)
+22 <type> ::= <primitive-type>
+23 <comp-task-def> ::= (:task <task-def>)
+24 <task-def> ::= <task-symbol>
+    :parameters (<typed list (variable)>)
+25 <task-symbol> ::= <name>
+26 <method-def> ::= (:method <name>
+27 :parameters (<typed list (variable)>)
+28 :task (<task-symbol> <term>*)
+29 [:precondition <gd>]
+    only with feature :htn−method−prec
+30 <tasknetwork-def>)
+31 <tasknetwork-def> ::=
+32 [:[ordered-][sub]tasks
+    <subtask-defs>]
+33 [:order[ing] <ordering-defs>]
+34 [:constraints <constraint-defs>]
+35 <subtask-defs> ::= () | <subtask-def>
+    | (and <subtask-def>+)
+36 <subtask-def> ::= (<task-symbol> <term>*)
+    | (<subtask-id> (<task-symbol> <term>*))
+37 <subtask-id> ::= <name>
+38 <ordering-defs> ::= () | <ordering-def>
+    | (and <ordering-def>+)
+39 <ordering-def> ::=
+    (<subtask-id> "<" <subtask-id>)
+40 <constraint-defs> ::= () | <constraint-def>
+    | (and <constraint-def>+)
+41 <constraint-def> ::= ()
+    | (not (= <term> <term>))
+    | (= <term> <term>)
+42 <action-def> ::= (:action <task-def>
+43 [:precondition <gd>]
+44 [:effects <effect>])
+45 <gd> ::= ()
+46 <gd> ::= <atomic formula (term)>
+47 <gd> ::= <literal (term)>
+    only with feature :negative-preconditions
+48 <gd> ::= (and <gd>*)
+49 <gd> ::= (or <gd>*)
+    only with feature :disjunctive-preconditions
+50 <gd> ::= (not <gd>)
+    only with feature :disjunctive-preconditions
+51 <gd> ::= (imply <gd> <gd>)
+    only with feature :disjunctive-preconditions
+52 <gd> ::=
+    (exists (<typed list (variable)>*) <gd>)
+    only with feature :existential-preconditions
+53 <gd> ::=
+    (forall (<typed list (variable)>*) <gd>)
+    only with feature :universal-preconditions
+54 <gd> ::= (= <term> <term>)
+55 <literal (t)> ::= <atomic formula(t)>
+56 <literal (t)> ::= (not <atomic formula(t)>)
+57 <atomic formula(t)> ::= (<predicate> t*)
+58 <term> ::= <name>
+59 <term> ::= <variable>
+60 <effect> ::= ()
+61 <effect> ::= (and <c-effect>*)
+62 <effect> ::= <c-effect>
+63 <c-effect> ::=
+    only with feature :conditional-effects
+    (forall (<variable>*) <effect>)
+64 <c-effect> ::=
+    (when <gd> <cond-effect>)
+    only with feature :conditional-effects 
+65 <c-effect> ::= <p-effect>
+66 <p-effect> ::= (not <atomic formula(term)>)
+67 <p-effect> ::= <atomic formula(term)>
+68 <cond-effect> ::= (and <p-effect>*)
+69 <cond-effect> ::= <p-effect>
+70 <problem> ::= (define (problem <name>)
+71 (:domain <name>)
+72 [<require-def>]
+73 [<p-object-declaration>]
+74 [<p-htn>]
+75 <p-init>
+76 [<p-goal>])
+77 <p-object-declaration> ::=
+    (:objects <typed list (name)>)
+78 <p-init> ::= (:init <init-el>*)
+79 <init-el> ::= <literal (name)>
+80 <p-goal> ::= (:goal <gd>)
+81 <p-htn> ::= (<p-class>
+82 [:parameters (<typed list (variable)>)]
+83 <tasknetwork-def>)
+84 <p-class> ::= :htn
+    only with feature :htn
