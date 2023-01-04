@@ -2,8 +2,8 @@ use chumsky::{prelude::*, text::whitespace};
 
 use super::ast::{
     AtomicFormula, AtomicFormulaSkeleton, BaseType, ConstantsDef, ConstraintDef, Literal,
-    OrderingDef, Predicate, PredicatesDef, PrimitiveType, SubtaskDef, SubtaskId, TaskDef,
-    TaskSymbol, Term, Type, TypedList, Types, TypesDef, Variable,
+    OrderingDef, PEffect, Predicate, PredicatesDef, PrimitiveType, SubtaskDef, SubtaskId, TaskDef,
+    TaskSymbol, Term, Type, TypedList, Types, TypesDef, Variable, GD,
 };
 
 pub fn parse_name() -> impl Parser<char, String, Error = Simple<char>> + Clone {
@@ -230,8 +230,84 @@ pub fn parse_constraintdef() -> impl Parser<char, ConstraintDef, Error = Simple<
             }))
 }
 
-pub fn parse_gd() {
-    parse_literal(parse_term());
+// <gd> ::= ()
+// <gd> ::= <atomic formula (term)>
+// <gd> ::= <literal (term)>
+//     only with feature :negative-preconditions
+// <gd> ::= (and <gd>*)
+// <gd> ::= (or <gd>*)
+//     only with feature :disjunctive-preconditions
+// <gd> ::= (not <gd>)
+//     only with feature :disjunctive-preconditions
+// <gd> ::= (imply <gd> <gd>)
+//     only with feature :disjunctive-preconditions
+// <gd> ::=
+//     (exists (<typed list (variable)>*) <gd>)
+//         only with feature :existential-preconditions
+// <gd> ::=
+//     (forall (<typed list (variable)>*) <gd>)
+//         only with feature :universal-preconditions
+// <gd> ::= (= <term> <term>)
+pub fn parse_gd() -> impl Parser<char, GD, Error = Simple<char>> + Clone {
+    recursive(|gd_parser| {
+        // <gd> ::= ()
+        just('(')
+            .padded()
+            .then(just(')'))
+            .map(|_| GD::Empty)
+            // <gd> ::= <atomic formula (term)>
+            .or(parse_atomicformula(parse_term()).map(|formula| GD::Formula(formula)))
+            // <gd> ::= <literal (term)>
+            .or(parse_literal(parse_term()).map(|literal| GD::Literal(literal)))
+            // <gd> ::= (and <gd>*)
+            .or(gd_parser
+                .clone()
+                .padded()
+                .repeated()
+                .delimited_by(just('(').then(just("and").padded()), just(')'))
+                .map(|gds| GD::And(gds)))
+            // <gd> ::= (or <gd>*)
+            .or(gd_parser
+                .clone()
+                .padded()
+                .repeated()
+                .delimited_by(just('(').then(just("or").padded()), just(')'))
+                .map(|gds| GD::Or(gds)))
+            // <gd> ::= (not <gd>)
+            .or(gd_parser
+                .clone()
+                .delimited_by(just('(').then(just("not").padded()), just(')'))
+                .map(|gd| GD::Not(Box::new(gd))))
+            // <gd> ::= (imply <gd> <gd>)
+            .or(gd_parser
+                .clone()
+                .then(gd_parser.clone().padded())
+                .delimited_by(just('(').then(just("imply").padded()), just(')').padded())
+                .map(|(gd_1, gd_2)| GD::Imply(Box::new(gd_1), Box::new(gd_2))))
+            // <gd> ::=
+            //     (exists (<typed list (variable)>*) <gd>)
+            .or(parse_typedlist(parse_variable())
+                .padded()
+                .repeated()
+                .delimited_by(just('('), just(')'))
+                .then(gd_parser.clone())
+                .delimited_by(just('(').then(just("exists").padded()), just(')').padded())
+                .map(|(list, gd)| GD::Exists(list, Box::new(gd))))
+            // <gd> ::=
+            //     (forall (<typed list (variable)>*) <gd>)
+            .or(parse_typedlist(parse_variable())
+                .padded()
+                .repeated()
+                .delimited_by(just('('), just(')'))
+                .then(gd_parser.clone())
+                .delimited_by(just('(').then(just("forall").padded()), just(')').padded())
+                .map(|(list, gd)| GD::ForAll(list, Box::new(gd))))
+            // <gd> ::= (= <term> <term>)
+            .or(parse_term()
+                .then(parse_term().padded())
+                .delimited_by(just('(').then(just('=').padded()), just(')'))
+                .map(|(t_1, t_2)| GD::Eq(t_1, t_2)))
+    })
 }
 
 // <literal (t)> ::= <atomic formula(t)>
@@ -261,4 +337,24 @@ pub fn parse_term() -> impl Parser<char, Term, Error = Simple<char>> + Clone {
     parse_name()
         .map(|name| Term::Name(name))
         .or(parse_variable().map(|var| Term::Var(var)))
+}
+
+// <p-effect> ::= (not <atomic formula(term)>)
+// <p-effect> ::= <atomic formula(term)>
+pub fn parse_peffect() -> impl Parser<char, PEffect, Error = Simple<char>> + Clone {
+    parse_atomicformula(parse_term())
+        .map(|formula| PEffect::Pos(formula))
+        .or(parse_atomicformula(parse_term())
+            .delimited_by(just('(').then(just("not").padded()), just(')').padded())
+            .map(|formula| PEffect::Neg(formula)))
+}
+
+// <cond-effect> ::= (and <p-effect>*)
+// <cond-effect> ::= <p-effect>
+pub fn parse_condeffect() -> impl Parser<char, Vec<PEffect>, Error = Simple<char>> {
+    parse_peffect()
+        .padded()
+        .repeated()
+        .delimited_by(just('(').then(just("and").padded()), just(')').padded())
+        .or(parse_peffect().map(|peffect| vec![peffect]))
 }
